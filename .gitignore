@@ -1,0 +1,16 @@
+# secrets
+.env
+
+# sqlite journal + WAL/SHM sidecars
+*.db
+*.db-wal
+*.db-shm
+
+# generated OKF bundles
+okf/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/

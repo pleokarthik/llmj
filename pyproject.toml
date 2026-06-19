@@ -1,0 +1,13 @@
+[project]
+name = "llmj"
+version = "0.1.0"
+description = "Local-first journal for cross-provider LLM events."
+readme = "README.md"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+sentence-transformers = ["sentence-transformers"]
+ollama = []
+
+[project.scripts]
+llmj-step1 = "example_step1:main"
