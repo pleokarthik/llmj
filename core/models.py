@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 
 
 @dataclass(frozen=True)
@@ -78,16 +78,3 @@ class Event:
             payload=payload,
             created_at=row[19],
         )
-
-
-@dataclass(frozen=True)
-class Hit:
-    event_id: str
-    score: float
-    payload: dict[str, Any]
-
-
-@dataclass(frozen=True)
-class Vector:
-    values: list[float]
-    metadata: dict[str, Any]

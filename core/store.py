@@ -8,7 +8,7 @@ import struct
 import time
 from typing import Any, Iterable
 
-from core.models import Event, Hit
+from core.models import Event
 from core.ulid import ulid
 
 
