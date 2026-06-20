@@ -5,7 +5,7 @@ import os
 import time
 from typing import Any
 
-from core.context import _derive_provenance
+from core.provenance import derive_provenance
 from core.embedder import Embedder
 from core.llm_client import LLMClient
 from core.store import Store
@@ -28,7 +28,7 @@ class OKFEnricher:
 
     def enrich(self, event_id: str, root_id: str | None = None) -> dict[str, Any]:
         event = self.store.get(event_id)
-        provenance = _derive_provenance(event.origin, event.role)
+        provenance = derive_provenance(event.origin, event.role)
 
         messages = [
             {"role": "user", "content": f"{ENRICHMENT_PROMPT}\n\n{event.content}"},

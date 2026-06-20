@@ -17,12 +17,7 @@ SUMMARY_CHAR_BUDGET = 2000
 RECENCY_TIE_THRESHOLD = 0.05
 
 
-def _derive_provenance(origin: str, role: str | None) -> str:
-    if origin == "user" and role == "assistant":
-        return "model_claim"
-    if origin == "user":
-        return "user_statement"
-    return "model_claim"
+from core.provenance import derive_provenance
 
 
 def weight_by_provenance(
@@ -36,7 +31,7 @@ def weight_by_provenance(
     weighted: list[tuple[str, float, str, str]] = []
     for event_id, raw_score in hits:
         event = store.get(event_id)
-        provenance = _derive_provenance(event.origin, event.role)
+        provenance = derive_provenance(event.origin, event.role)
         weight = PROVENANCE_WEIGHTS.get(provenance, 0.4)
         weighted.append((event_id, raw_score * weight, provenance, event.created_at))
     return weighted
