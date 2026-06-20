@@ -4,7 +4,7 @@ from core.store import Store
 from core.embedder import Embedder
 from core.llm_client import LLMClient
 from core.okf import OKFEnricher, enrich_run
-from core.runner import start_run, end_run
+from handshake.runner import start_run, end_run
 
 store = Store("journal.db")
 embedder = Embedder("google")
