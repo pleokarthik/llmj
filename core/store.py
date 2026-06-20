@@ -63,7 +63,8 @@ class Store:
                 latency_ms INTEGER NULL,
                 scope TEXT NOT NULL,
                 payload JSON NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                provenance TEXT NULL
             )
             """
         )
@@ -85,6 +86,10 @@ class Store:
             END
             """
         )
+        try:
+            self.conn.execute("ALTER TABLE events ADD COLUMN provenance TEXT NULL")
+        except sqlite3.OperationalError:
+            pass
         self.conn.execute(
             """
             CREATE TABLE IF NOT EXISTS vectors (
@@ -135,8 +140,9 @@ class Store:
                 latency_ms,
                 scope,
                 payload,
-                created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at,
+                provenance
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             event.to_row(),
         )

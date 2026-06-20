@@ -29,7 +29,7 @@ class OKFEnricher:
 
     def enrich(self, event_id: str, root_id: str | None = None) -> dict[str, Any]:
         event = self.store.get(event_id)
-        provenance = derive_provenance(event.origin, event.role)
+        provenance = derive_provenance(event.origin, event.role, event.provenance)
 
         messages = [
             {"role": "user", "content": f"{ENRICHMENT_PROMPT}\n\n{event.content}"},

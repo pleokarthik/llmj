@@ -27,6 +27,7 @@ class Event:
     scope: str
     payload: Optional[dict[str, Any]]
     created_at: str
+    provenance: Optional[str] = None
 
     def to_row(self) -> tuple:
         return (
@@ -50,12 +51,14 @@ class Event:
             self.scope,
             json.dumps(self.payload) if self.payload is not None else None,
             self.created_at,
+            self.provenance,
         )
 
     @staticmethod
     def from_row(row: tuple) -> "Event":
         params = json.loads(row[11]) if row[11] is not None else None
         payload = json.loads(row[18]) if row[18] is not None else None
+        provenance = row[20] if len(row) > 20 else None
         return Event(
             event_id=row[0],
             event_type=row[1],
@@ -77,4 +80,5 @@ class Event:
             scope=row[17],
             payload=payload,
             created_at=row[19],
+            provenance=provenance,
         )

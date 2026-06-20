@@ -367,6 +367,70 @@ def check_4_vec_events_dimension_mismatch_rollback():
     cleanup(store, db_path)
 
 
+def check_5_user_confirmed_provenance():
+    """user_confirmed provenance: assert -> store -> derive -> weight, end to end."""
+    from core.provenance import derive_provenance
+    from handshake.context import weight_by_provenance, PROVENANCE_WEIGHTS
+
+    store, db_path = make_temp_store()
+    chat_id = "check5-chat"
+    root = ulid()
+    ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    # Journal a user_confirmed event
+    confirmed_id = ulid()
+    store.append(Event(
+        event_id=confirmed_id, event_type="user_input", chat_id=chat_id,
+        parent_id=None, root_id=root, origin="user", role="user",
+        tool_name=None, status=None, provider=None, model=None,
+        params=None, content="Paris is the capital of France",
+        tokens_in=None, tokens_out=None, cost=None, latency_ms=None,
+        scope="user", payload=None, created_at=ts,
+        provenance="user_confirmed",
+    ))
+
+    # Stored provenance survives round-trip
+    event = store.get(confirmed_id)
+    assert event.provenance == "user_confirmed", (
+        f"Stored provenance is {event.provenance!r}, expected 'user_confirmed'"
+    )
+
+    # derive_provenance honors asserted user_confirmed
+    prov = derive_provenance(event.origin, event.role, event.provenance)
+    assert prov == "user_confirmed", f"derive_provenance returned {prov!r}"
+
+    # Retrieval weighting applies user_confirmed weight (1.0)
+    hits = [(confirmed_id, 0.9)]
+    weighted = weight_by_provenance(hits, store)
+    _, weighted_score, wprov, _ = weighted[0]
+    assert wprov == "user_confirmed", f"weight_by_provenance returned {wprov!r}"
+    expected = 0.9 * PROVENANCE_WEIGHTS["user_confirmed"]
+    assert abs(weighted_score - expected) < 1e-9, (
+        f"Weight: {weighted_score}, expected {expected}"
+    )
+
+    # NEGATIVE: model output cannot be promoted to user_confirmed
+    try:
+        derive_provenance("user", "assistant", "user_confirmed")
+        assert False, "Should have raised on model output promotion"
+    except ValueError:
+        pass
+
+    # NEGATIVE: system origin cannot be promoted
+    try:
+        derive_provenance("system:enrichment", None, "user_confirmed")
+        assert False, "Should have raised on system origin promotion"
+    except ValueError:
+        pass
+
+    # Absent provenance falls back to default derivation
+    assert derive_provenance("user", None) == "user_statement"
+    assert derive_provenance("user", "assistant") == "model_claim"
+    assert derive_provenance("system:enrichment", None) == "model_claim"
+
+    cleanup(store, db_path)
+
+
 if __name__ == "__main__":
     checks = [
         ("Check 1: LLMClient.call() dangling start on error", check_1_dangling_start_event),
@@ -374,6 +438,7 @@ if __name__ == "__main__":
         ("Check 3: vectors rebuild-from-journal faithfulness", check_3_vectors_rebuild_from_journal),
         ("Check 3b: transaction rollback on vectors write failure", check_3b_transaction_rollback),
         ("Check 4: vec_events dimension mismatch rollback", check_4_vec_events_dimension_mismatch_rollback),
+        ("Check 5: user_confirmed provenance end-to-end", check_5_user_confirmed_provenance),
     ]
     passed = 0
     failed = 0
