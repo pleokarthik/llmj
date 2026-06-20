@@ -1,3 +1,4 @@
+# OKF enrichment: summarizes journal events via LLM, writes bundles and vectors.
 from __future__ import annotations
 
 import json

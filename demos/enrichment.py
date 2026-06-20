@@ -3,7 +3,7 @@ load_project_env()
 from core.store import Store
 from core.embedder import Embedder
 from core.llm_client import LLMClient
-from core.okf import OKFEnricher, enrich_run
+from handshake.enrichment import OKFEnricher, enrich_run
 from handshake.runner import start_run, end_run
 
 store = Store("journal.db")
