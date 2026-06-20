@@ -1,0 +1,4 @@
+git rm --cached Docs/DDD.md Docs/HLD.md Docs/COPILOT_PROMPT.md
+# add the three lines to .gitignore
+git add .gitignore
+git commit --amend --no-edit

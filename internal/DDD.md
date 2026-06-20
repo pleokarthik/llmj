@@ -126,7 +126,7 @@ journal events (filtered: recency threshold, stable content, min provenance)
   → OKFDoc (frontmatter + markdown body)
   → written to bundle directory
   → Embedder.embed([doc.body])
-  → Store.upsert_vector(payload)        # provenance from OKF frontmatter; okf_doc_id set
+  → Store.upsert_vector(event_id, text, embedding, provider, model)
 ```
 
 ---
@@ -140,11 +140,12 @@ Store           # persistence of journal + views
   .append(event)              -> None          # immutable, durable write
   .get(event_id)              -> Event
   .query(filter)              -> Iterable[Event]
-  .upsert_vector(payload)     -> None
-  .search(vector, filter, k)  -> list[Hit]
+  .upsert_vector(event_id, text, embedding,
+                 embedding_provider, embedding_model)  -> None
+  .search(query_embedding, top_k, chat_id, scope)     -> list[tuple[str, float]]
 
 Embedder        # text -> vector
-  .embed(texts: list[str])    -> list[Vector]
+  .embed(text: str)           -> list[float]
 
 ProviderAdapter # canonical <-> wire format, one per provider (registry earned)
   .to_wire(canonical_request) -> provider_payload

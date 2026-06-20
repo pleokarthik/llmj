@@ -145,7 +145,7 @@ journal events (filtered: user_statement provenance, stable content, recency thr
   → OKFDoc (frontmatter + markdown body)
   → written to bundle directory
   → Embedder.embed([doc.body])
-  → Store.upsert_vector(payload)       # provenance inherited from OKF frontmatter
+  → Store.upsert_vector(event_id, text, embedding, provider, model)
 ```
 
 Active context size is **fixed regardless of conversation length** — a 10,000-message thread injects the same budget as a 100-message one. Context cost is O(1) in length by construction.
