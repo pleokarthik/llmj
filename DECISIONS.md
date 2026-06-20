@@ -65,3 +65,46 @@ raised `sqlite3.OperationalError` at the sqlite-vec INSERT (SQL level, not
 `struct.pack`). The vectors row and embedding event — both already executed in the
 same transaction — were rolled back. vec0 correctly participates in SQLite's
 transaction rollback via `xRollback`. No partial state persisted.
+
+## 2026-06-21: Caller-assertable provenance and schema change
+
+### What changed
+
+Provenance is now stored on the Event when explicitly asserted by the caller, via
+a new `provenance: Optional[str] = None` field on the Event dataclass
+(`core/models.py`) and a corresponding `provenance TEXT NULL` column on the events
+table (`core/store.py`). When `provenance` is None (the default), `derive_provenance`
+falls back to the existing origin+role derivation — `user_statement` or `model_claim`.
+When set to `"user_confirmed"`, it is honored directly.
+
+### Why
+
+`PROVENANCE_WEIGHTS` defined three tiers (`user_confirmed: 1.0`, `user_statement: 0.8`,
+`model_claim: 0.4`) but `derive_provenance` could only emit two — nothing produced
+`user_confirmed`. llmj is headless; confirmation is a caller assertion (the calling
+application knows a fact was confirmed, llmj cannot infer it), so it must be stored
+on the event, not derived from origin+role.
+
+### Design shift: stored when asserted, derived when absent
+
+Provenance was previously always derived at read time from origin+role, never stored.
+It is now stored when the caller asserts it, derived when absent. This supersedes
+any prior statement that provenance is purely derived. The `provenance` column on the
+events table is the durable record; `derive_provenance` (`core/provenance.py`) reads
+it as the `asserted` parameter and honors it when present.
+
+### Schema contract change
+
+The events table gained a `provenance TEXT NULL` column. An `ALTER TABLE` migration
+in `Store._create_schema()` adds the column to existing journals; new journals
+include it in the `CREATE TABLE`. Row-immutability is unaffected (column addition,
+not row mutation). Portability implication: readers of the events table must tolerate
+the added column. Existing rows have `provenance = NULL`, meaning "derive as before."
+
+### Invariant: model output never promoted
+
+`derive_provenance` raises `ValueError` if `user_confirmed` is asserted on model
+output (`role="assistant"` or `origin.startswith("system:")`). This is code-enforced
+in `core/provenance.py`, not convention. Valid tiers are constrained by
+`VALID_PROVENANCE_TIERS = {"user_confirmed", "user_statement", "model_claim"}`;
+any other asserted value raises `ValueError`. No new tiers were added.
