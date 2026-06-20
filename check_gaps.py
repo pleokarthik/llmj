@@ -70,7 +70,7 @@ def check_1_dangling_start_event():
 
 def check_2_summary_self_contamination():
     """current_rolling_summary() should exclude origin='system:summarizer' from its input."""
-    from core.context import current_rolling_summary
+    from handshake.context import current_rolling_summary
 
     store, db_path = make_temp_store()
     chat_id = "check2-chat"

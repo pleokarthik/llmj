@@ -3,7 +3,7 @@ load_project_env()
 from core.store import Store
 from core.embedder import Embedder
 from core.llm_client import LLMClient
-from core.handshake import switch_model
+from handshake.model_switch import switch_model
 
 store = Store("journal.db")
 embedder = Embedder("google")
