@@ -52,22 +52,16 @@ and repopulates `vectors`. Then calls `rebuild_vec_index()` if sqlite-vec is loa
 embedding event and remain unreconstructable. A one-time full re-enrich through the
 updated OKF path would bring them into compliance.
 
-## Open residual: vec0 virtual table transaction compliance
+## Closed residual: vec0 virtual table transaction compliance
 
-**Status:** Unverified inference.
+**Status:** Runtime-verified (2026-06-20, sqlite-vec 0.1.9).
 
 The single-transaction design in `upsert_vector()` (embedding event → vectors →
 vec_events → one commit) protects against partial writes: if any step fails before
-`commit()`, all uncommitted writes roll back. This was runtime-verified for the
-standard SQLite path (Check 3b: vectors INSERT fails → embedding event rolled back).
+`commit()`, all uncommitted writes roll back.
 
-The vec_events path uses sqlite-vec's vec0 virtual table. Virtual tables *can* have
-non-standard transaction behavior if their `xBegin`/`xRollback` methods don't
-implement the full protocol. Whether vec0 correctly participates in SQLite's
-transaction rollback has **not been runtime-verified** — sqlite-vec is not installed
-in the current environment.
-
-**Trigger to close:** Run `python check_gaps.py` on a machine with sqlite-vec
-installed. If Check 4 passes (dimension mismatch in vec_events INSERT rolls back
-the vectors row and embedding event), item 4 is fully closed. Check 4 is armed and
-will exercise the real vec0 path automatically when the extension is available.
+Check 4 confirmed: a dimension mismatch (8 dims into a float[4] vec_events table)
+raised `sqlite3.OperationalError` at the sqlite-vec INSERT (SQL level, not
+`struct.pack`). The vectors row and embedding event — both already executed in the
+same transaction — were rolled back. vec0 correctly participates in SQLite's
+transaction rollback via `xRollback`. No partial state persisted.
