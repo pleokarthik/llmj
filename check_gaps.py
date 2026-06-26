@@ -10,10 +10,10 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.store import Store
-from core.models import Event
+from core.journal_store import Store
+from core.event_model import Event
 from core.llm_client import LLMClient
-from core.ulid import ulid
+from core.id_generator import ulid
 
 
 def make_temp_store():
@@ -70,7 +70,7 @@ def check_1_dangling_start_event():
 
 def check_2_summary_self_contamination():
     """current_rolling_summary() should exclude origin='system:summarizer' from its input."""
-    from handshake.context import current_rolling_summary
+    from handshake.context_assembler import current_rolling_summary
 
     store, db_path = make_temp_store()
     chat_id = "check2-chat"
@@ -119,7 +119,7 @@ class FakeEmbeddingAdapter:
 
 
 def _register_fake_adapter():
-    from core.embedder import EMBEDDING_ADAPTER_REGISTRY
+    from core.vector_embedder import EMBEDDING_ADAPTER_REGISTRY
     EMBEDDING_ADAPTER_REGISTRY["test"] = FakeEmbeddingAdapter
 
 
@@ -127,7 +127,7 @@ def check_3_vectors_rebuild_from_journal():
     """After vectors data loss, rebuild must restore vectors from journaled embedding
     events using the exact text originally embedded — not events.content."""
     _register_fake_adapter()
-    from core.embedder import Embedder
+    from core.vector_embedder import Embedder
 
     store, db_path = make_temp_store()
     chat_id = "check3-chat"
@@ -370,7 +370,7 @@ def check_4_vec_events_dimension_mismatch_rollback():
 def check_5_user_confirmed_provenance():
     """user_confirmed provenance: assert -> store -> derive -> weight, end to end."""
     from core.provenance import derive_provenance
-    from handshake.context import weight_by_provenance, PROVENANCE_WEIGHTS
+    from handshake.context_assembler import weight_by_provenance, PROVENANCE_WEIGHTS
 
     store, db_path = make_temp_store()
     chat_id = "check5-chat"

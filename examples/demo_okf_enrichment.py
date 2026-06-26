@@ -1,10 +1,10 @@
 from core.config import load_project_env
 load_project_env()
-from core.store import Store
-from core.embedder import Embedder
+from core.journal_store import Store
+from core.vector_embedder import Embedder
 from core.llm_client import LLMClient
-from handshake.enrichment import OKFEnricher, enrich_run
-from handshake.runner import start_run, end_run
+from handshake.okf_enrichment import OKFEnricher, enrich_run
+from handshake.session_runner import start_run, end_run
 
 store = Store("journal.db")
 embedder = Embedder("google")

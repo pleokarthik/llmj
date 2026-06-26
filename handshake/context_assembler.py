@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.embedder import Embedder
+from core.vector_embedder import Embedder
 from core.llm_client import LLMClient
-from core.store import Store
+from core.journal_store import Store
 
 
 PROVENANCE_WEIGHTS: dict[str, float] = {

@@ -7,9 +7,9 @@ import time
 from typing import Any
 
 from core.provenance import derive_provenance
-from core.embedder import Embedder
+from core.vector_embedder import Embedder
 from core.llm_client import LLMClient
-from core.store import Store
+from core.journal_store import Store
 
 
 ENRICHMENT_PROMPT = (

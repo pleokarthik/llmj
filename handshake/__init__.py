@@ -1,4 +1,4 @@
-from handshake.runner import (
+from handshake.session_runner import (
     end_run,
     get_run_status,
     reconcile_crashed_runs,

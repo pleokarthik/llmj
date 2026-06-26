@@ -9,12 +9,12 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from core.store import Store
-from core.models import Event
+from core.journal_store import Store
+from core.event_model import Event
 from core.llm_client import LLMClient
 from core.tool_runner import ToolRunner
 from core.provenance import derive_provenance, VALID_PROVENANCE_TIERS
-from core.ulid import ulid
+from core.id_generator import ulid
 
 
 def make_temp_store():
@@ -370,7 +370,7 @@ def test_llmclient_root_id_propagates():
 # ═══════════════════════════════════════════════════════════
 
 def test_rolling_summary_empty_chat():
-    from handshake.context import current_rolling_summary
+    from handshake.context_assembler import current_rolling_summary
     store, db_path = make_temp_store()
     llm = LLMClient(store, api_keys={"groq": "key"})
     assert current_rolling_summary("nonexistent-chat", store, llm) == ""
@@ -378,25 +378,25 @@ def test_rolling_summary_empty_chat():
 
 
 def test_weight_by_provenance_empty_hits():
-    from handshake.context import weight_by_provenance
+    from handshake.context_assembler import weight_by_provenance
     store, db_path = make_temp_store()
     assert weight_by_provenance([], store) == []
     cleanup(store, db_path)
 
 
 def test_recency_tiebreak_empty():
-    from handshake.context import recency_tiebreak
+    from handshake.context_assembler import recency_tiebreak
     assert recency_tiebreak([]) == []
 
 
 def test_recency_tiebreak_single_item():
-    from handshake.context import recency_tiebreak
+    from handshake.context_assembler import recency_tiebreak
     item = [("id1", 0.8, "user_statement", "2026-01-01T00:00:00Z")]
     assert recency_tiebreak(item) == item
 
 
 def test_recency_tiebreak_orders_within_threshold():
-    from handshake.context import recency_tiebreak
+    from handshake.context_assembler import recency_tiebreak
     hits = [
         ("old", 0.80, "user_statement", "2026-01-01T00:00:00Z"),
         ("new", 0.79, "user_statement", "2026-06-01T00:00:00Z"),
@@ -407,7 +407,7 @@ def test_recency_tiebreak_orders_within_threshold():
 
 
 def test_recency_tiebreak_respects_score_gap():
-    from handshake.context import recency_tiebreak
+    from handshake.context_assembler import recency_tiebreak
     hits = [
         ("high", 0.90, "user_statement", "2026-01-01T00:00:00Z"),
         ("low", 0.80, "user_statement", "2026-06-01T00:00:00Z"),
@@ -422,7 +422,7 @@ def test_recency_tiebreak_respects_score_gap():
 # ═══════════════════════════════════════════════════════════
 
 def test_run_end_invalid_status():
-    from handshake.runner import start_run, end_run
+    from handshake.session_runner import start_run, end_run
     store, db_path = make_temp_store()
     root = start_run("chat", "test", store)
     try:
@@ -434,7 +434,7 @@ def test_run_end_invalid_status():
 
 
 def test_run_resume_nonexistent():
-    from handshake.runner import resume_run
+    from handshake.session_runner import resume_run
     store, db_path = make_temp_store()
     try:
         resume_run("nonexistent-root", store)
@@ -445,7 +445,7 @@ def test_run_resume_nonexistent():
 
 
 def test_run_resume_after_terminal():
-    from handshake.runner import start_run, end_run, resume_run
+    from handshake.session_runner import start_run, end_run, resume_run
     store, db_path = make_temp_store()
     root = start_run("chat", "test", store)
     end_run(root, "run_completed", store)
@@ -458,7 +458,7 @@ def test_run_resume_after_terminal():
 
 
 def test_get_run_status_nonexistent():
-    from handshake.runner import get_run_status
+    from handshake.session_runner import get_run_status
     store, db_path = make_temp_store()
     try:
         get_run_status("nonexistent", store)
@@ -478,7 +478,7 @@ def test_ulid_uniqueness():
 
 
 def test_ulid_format():
-    from core.ulid import CROCKFORD_BASE32
+    from core.id_generator import CROCKFORD_BASE32
     id_val = ulid()
     assert len(id_val) == 26
     for c in id_val:

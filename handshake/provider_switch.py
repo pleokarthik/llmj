@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from handshake.context import assemble_context
-from core.embedder import Embedder
+from handshake.context_assembler import assemble_context
+from core.vector_embedder import Embedder
 from core.llm_client import LLMClient
-from core.store import Store
+from core.journal_store import Store
 
 
 HANDOFF_PROMPT = (

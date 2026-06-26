@@ -8,8 +8,8 @@ import struct
 import time
 from typing import Any, Iterable
 
-from core.models import Event
-from core.ulid import ulid
+from core.event_model import Event
+from core.id_generator import ulid
 
 
 def _try_load_sqlite_vec(conn: sqlite3.Connection) -> bool:
@@ -234,7 +234,7 @@ class Store:
         if not emb_events:
             return
 
-        from core.embedder import Embedder
+        from core.vector_embedder import Embedder
 
         latest: dict[str, Event] = {}
         for event in emb_events:

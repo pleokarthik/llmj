@@ -1,9 +1,9 @@
 from core.config import load_project_env
 load_project_env()
-from core.store import Store
-from core.embedder import Embedder
+from core.journal_store import Store
+from core.vector_embedder import Embedder
 from core.llm_client import LLMClient
-from handshake.model_switch import switch_model
+from handshake.provider_switch import switch_model
 
 store = Store("journal.db")
 embedder = Embedder("google")

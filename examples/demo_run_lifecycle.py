@@ -1,9 +1,9 @@
 from core.config import load_project_env
 load_project_env()
-from core.store import Store
+from core.journal_store import Store
 from core.llm_client import LLMClient
 from core.tool_runner import ToolRunner
-from handshake.runner import start_run, end_run, resume_run, get_run_status, reconcile_crashed_runs
+from handshake.session_runner import start_run, end_run, resume_run, get_run_status, reconcile_crashed_runs
 
 store = Store("journal.db")
 llm = LLMClient(store)
