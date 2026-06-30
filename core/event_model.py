@@ -28,6 +28,8 @@ class Event:
     payload: Optional[dict[str, Any]]
     created_at: str
     provenance: Optional[str] = None
+    call_id: Optional[str] = None
+    sequence: Optional[int] = None
 
     def to_row(self) -> tuple:
         return (
@@ -52,6 +54,8 @@ class Event:
             json.dumps(self.payload) if self.payload is not None else None,
             self.created_at,
             self.provenance,
+            self.call_id,
+            self.sequence,
         )
 
     @staticmethod
@@ -59,6 +63,8 @@ class Event:
         params = json.loads(row[11]) if row[11] is not None else None
         payload = json.loads(row[18]) if row[18] is not None else None
         provenance = row[20] if len(row) > 20 else None
+        call_id = row[21] if len(row) > 21 else None
+        sequence = row[22] if len(row) > 22 else None
         return Event(
             event_id=row[0],
             event_type=row[1],
@@ -81,4 +87,6 @@ class Event:
             payload=payload,
             created_at=row[19],
             provenance=provenance,
+            call_id=call_id,
+            sequence=sequence,
         )

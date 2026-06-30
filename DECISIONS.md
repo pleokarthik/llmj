@@ -108,3 +108,104 @@ output (`role="assistant"` or `origin.startswith("system:")`). This is code-enfo
 in `core/provenance.py`, not convention. Valid tiers are constrained by
 `VALID_PROVENANCE_TIERS = {"user_confirmed", "user_statement", "model_claim"}`;
 any other asserted value raises `ValueError`. No new tiers were added.
+
+## 2026-06-30: Message-grain provenance write path
+
+### The problem
+
+The 2026-06-21 change above made `provenance` storable and caller-assertable in
+principle, but no real write path ever exercised it. `LLMClient.call()` journaled
+exactly one event per invocation — a single `event_type="llm_call"` start event whose
+`content` was `json.dumps(messages)`, the entire conversation history serialized as
+one blob. A `provenance` assertion is a claim about one statement ("the user
+confirmed X"); there was no row at single-statement granularity to attach that claim
+to. Asserting `user_confirmed` on the whole blob would also be wrong whenever the
+blob's history contained a prior assistant turn — `derive_provenance` would (correctly)
+reject it, but there was no way to assert it on *just* the new turn either, because
+the new turn didn't have its own row.
+
+### Options considered
+
+1. **Group-store-then-parse.** Keep the single blob event; recover per-message
+   structure on demand by re-parsing `json.dumps(messages)` content at read time.
+   Rejected: the events table is immutable, so a provenance assertion still has
+   nowhere durable to live without a second, correlated event — this option doesn't
+   avoid that problem, it just defers it while adding a JSON-parsing step to every
+   read.
+2. **Span-referencing confirmation events.** Leave the write path alone; add a new
+   event type that marks a confirmation by referencing an offset/span inside an
+   existing blob event's `content`. Rejected: span references into immutable text
+   are fragile (any future change to serialization — key order, whitespace, encoding
+   — silently invalidates existing spans), and resolving a span back to "which
+   logical message is this" still requires a parser. More moving parts than writing
+   messages as their own rows in the first place.
+3. **Fresh standalone confirmation events.** Emit an independent
+   `event_type="confirmation"` event per asserted statement, decoupled from how the
+   underlying message was journaled. Rejected: confirmation would exist in the
+   journal but retrieval (`weight_by_provenance`) still operates over whatever
+   granularity the original message was journaled at (the blob). A standalone
+   confirmation event doesn't change that grain, so recall still can't act on the
+   per-statement assertion without yet another join back to the blob it's about.
+4. **Granular write, flexible read (chosen).** Journal one event per message at
+   write time (`call_id` + `sequence`), so a provenance assertion has a real,
+   single-statement row to live on with no follow-up event required. Add one
+   projection function, `get_call()`, as the sole read entry point, so anything that
+   needs the original call-shaped view back can reconstitute it on demand
+   (`grain="blob"`) without every existing caller having to know the journal changed
+   shape underneath it.
+
+Option 4 won because it's the only one that makes provenance assertion a normal
+column write instead of a correlation problem, and it pays for that with one new read
+function (`get_call`) rather than a parser, a span-resolution step, or a join.
+
+### What changed
+
+- `events` gained two columns, `call_id TEXT NULL` and `sequence INTEGER NULL`
+  (`core/journal_store.py`, `Event` dataclass in `core/event_model.py`) — see
+  [DATABASE_DESIGN.md](docs/DATABASE_DESIGN.md) for the full migration.
+- `LLMClient.call()` mints one `call_id` per invocation and writes one
+  `event_type="message"` row per item in `messages`, `sequence` = list index, role
+  taken from the message dict itself. The existing `llm_call` start/end events are
+  unchanged except the start event's `content` is now `None` instead of the
+  serialized blob.
+- `LLMClient.call()` gained a `provenance` parameter, validated via
+  `derive_provenance()` and stored on the per-message row before any event is
+  appended (fail-fast on an invalid assertion).
+- `get_call(call_id, store, grain, filter)` was added to `handshake/context_assembler.py`
+  as the projection over this grain. `weight_by_provenance()` was updated to call it
+  explicitly at `grain="message"` instead of `store.get(event_id)` directly.
+
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) and [DIAGRAMS.md](docs/DIAGRAMS.md) for the full shape of
+the write/read paths.
+
+### Judgment call 1: provenance applies to the last message only
+
+`call()` takes one scalar `provenance` argument but `messages` is a full history —
+applying the assertion to every row would raise on the first prior assistant turn in
+that history, since `derive_provenance` correctly blocks `user_confirmed` on
+`role="assistant"`. The assertion is applied only to the *last* message in the array
+— the new turn being submitted this call, which is the only statement the caller could
+plausibly be confirming "right now." Every earlier message in the array gets
+`provenance=None` (derived as before, unaffected by this change). This wasn't fully
+specified going in; it's the interpretation that makes a single scalar argument
+coherent against `derive_provenance`'s existing invariant rather than fighting it.
+
+### Judgment call 2: `get_call()`'s legacy-id fallback is known debt
+
+Vector-search hits from `Store.search()` are still keyed to `llm_call`/`embedding`
+event ids, not `call_id`s — nothing yet embeds individual `message` rows;
+`OKFEnricher.enrich_run()` still only embeds assistant `llm_call` responses
+(`handshake/okf_enrichment.py`, unchanged by this work). Without a fallback,
+`get_call(event_id, grain="message")` called from `weight_by_provenance()` on one of
+these ids would match zero `message` rows and return an empty list — silently zeroing
+out all retrieval. `get_call()` falls back to `store.get(call_id)` (treating the
+argument as a plain `event_id`) whenever no `message` rows match, which is what keeps
+existing retrieval and `check_5_user_confirmed_provenance` passing unmodified.
+
+This is deliberate, not accidental, but it is debt: it means `message`-grain rows are
+not yet part of the retrieval corpus at all. A user statement can now be marked
+`user_confirmed`, but nothing makes that statement individually retrievable or
+individually weighted in `assemble_context()` — only the full assistant-response
+blob that OKF enrichment summarizes is. Closing this requires embedding `message`
+rows directly (or running them through enrichment), which is out of scope for this
+change and not yet scheduled.

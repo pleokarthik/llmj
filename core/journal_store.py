@@ -64,7 +64,9 @@ class Store:
                 scope TEXT NOT NULL,
                 payload JSON NULL,
                 created_at TEXT NOT NULL,
-                provenance TEXT NULL
+                provenance TEXT NULL,
+                call_id TEXT NULL,
+                sequence INTEGER NULL
             )
             """
         )
@@ -88,6 +90,14 @@ class Store:
         )
         try:
             self.conn.execute("ALTER TABLE events ADD COLUMN provenance TEXT NULL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            self.conn.execute("ALTER TABLE events ADD COLUMN call_id TEXT NULL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            self.conn.execute("ALTER TABLE events ADD COLUMN sequence INTEGER NULL")
         except sqlite3.OperationalError:
             pass
         self.conn.execute(
@@ -115,6 +125,10 @@ class Store:
             "CREATE INDEX IF NOT EXISTS ix_events_event_type "
             "ON events (event_type)"
         )
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS ix_events_call_id "
+            "ON events (call_id)"
+        )
         self.conn.commit()
 
     def _append_no_commit(self, event: Event) -> None:
@@ -141,8 +155,10 @@ class Store:
                 scope,
                 payload,
                 created_at,
-                provenance
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                provenance,
+                call_id,
+                sequence
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             event.to_row(),
         )

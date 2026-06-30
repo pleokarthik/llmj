@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.event_model import Event
 from core.vector_embedder import Embedder
 from core.llm_client import LLMClient
 from core.journal_store import Store
@@ -20,20 +21,67 @@ RECENCY_TIE_THRESHOLD = 0.05
 from core.provenance import derive_provenance
 
 
+def get_call(
+    call_id: str,
+    store: Store,
+    grain: str = "message",
+    filter: dict[str, Any] | None = None,
+) -> list[Event] | list[dict[str, Any]]:
+    """Project a call's per-message events.
+
+    grain='message' returns raw Event rows ordered by sequence.
+    grain='blob' reassembles them into the original [{role, content}, ...] shape.
+
+    A call_id with no matching 'message' rows falls back to treating call_id as
+    a plain event_id, so callers built around single events (e.g. retrieval
+    hits keyed to pre-split or non-message events) still resolve to one row.
+    """
+    if grain not in ("message", "blob"):
+        raise ValueError(f"Invalid grain: {grain!r}. Must be 'message' or 'blob'.")
+
+    events = sorted(
+        store.query({"call_id": call_id, "event_type": "message"}),
+        key=lambda e: e.sequence,
+    )
+
+    if not events:
+        try:
+            events = [store.get(call_id)]
+        except KeyError:
+            events = []
+
+    if filter:
+        for key, value in filter.items():
+            if key == "provenance":
+                events = [
+                    e for e in events
+                    if derive_provenance(e.origin, e.role, e.provenance) == value
+                ]
+            else:
+                events = [e for e in events if getattr(e, key, None) == value]
+
+    if grain == "message":
+        return events
+    return [{"role": e.role, "content": e.content} for e in events]
+
+
 def weight_by_provenance(
     hits: list[tuple[str, float]],
     store: Store,
 ) -> list[tuple[str, float, str, str]]:
     """Multiply raw cosine scores by provenance weight.
 
-    Returns list of (event_id, weighted_score, provenance, created_at).
+    Each hit's call_id is projected at message grain — a hit covering several
+    messages expands into one weighted tuple per message, since provenance is
+    per-statement, not per-call. Returns list of (event_id, weighted_score,
+    provenance, created_at).
     """
     weighted: list[tuple[str, float, str, str]] = []
     for event_id, raw_score in hits:
-        event = store.get(event_id)
-        provenance = derive_provenance(event.origin, event.role, event.provenance)
-        weight = PROVENANCE_WEIGHTS.get(provenance, 0.4)
-        weighted.append((event_id, raw_score * weight, provenance, event.created_at))
+        for event in get_call(event_id, store, grain="message"):
+            provenance = derive_provenance(event.origin, event.role, event.provenance)
+            weight = PROVENANCE_WEIGHTS.get(provenance, 0.4)
+            weighted.append((event.event_id, raw_score * weight, provenance, event.created_at))
     return weighted
 
 

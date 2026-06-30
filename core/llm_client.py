@@ -9,6 +9,7 @@ from typing import Any
 
 from core.config import load_project_env
 from core.event_model import Event
+from core.provenance import derive_provenance
 from core.provider_adapter import PROVIDER_ADAPTER_REGISTRY
 from core.journal_store import Store
 from core.id_generator import ulid
@@ -46,6 +47,7 @@ class LLMClient:
         scope: str = "user",
         origin: str = "user",
         root_id: str | None = None,
+        provenance: str | None = None,
     ) -> dict[str, Any]:
         if provider not in PROVIDER_ADAPTER_REGISTRY:
             raise ValueError(f"Unsupported provider: {provider}")
@@ -56,6 +58,43 @@ class LLMClient:
             "messages": messages,
             "temperature": temperature,
         }
+        call_id = ulid()
+        message_created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        # `provenance` is an assertion about the newest statement being submitted
+        # this turn, not the replayed history, so only the last message is eligible.
+        message_events = []
+        last_index = len(messages) - 1
+        for index, message in enumerate(messages):
+            msg_role = message.get("role")
+            msg_provenance = None
+            if index == last_index and provenance is not None:
+                msg_provenance = derive_provenance(origin, msg_role, provenance)
+            message_events.append(Event(
+                event_id=ulid(),
+                event_type="message",
+                chat_id=chat_id,
+                parent_id=None,
+                root_id=root_id,
+                origin=origin,
+                role=msg_role,
+                tool_name=None,
+                status=None,
+                provider=provider,
+                model=model,
+                params=None,
+                content=message.get("content"),
+                tokens_in=None,
+                tokens_out=None,
+                cost=None,
+                latency_ms=None,
+                scope=scope,
+                payload=None,
+                created_at=message_created_at,
+                call_id=call_id,
+                sequence=index,
+                provenance=msg_provenance,
+            ))
+
         start_event = Event(
             event_id=ulid(),
             event_type="llm_call",
@@ -69,7 +108,7 @@ class LLMClient:
             provider=provider,
             model=model,
             params=canonical_request,
-            content=json.dumps(messages),
+            content=None,
             tokens_in=None,
             tokens_out=None,
             cost=None,
@@ -79,6 +118,8 @@ class LLMClient:
             created_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         )
         self.store.append(start_event)
+        for message_event in message_events:
+            self.store.append(message_event)
 
         started = time.perf_counter()
         try:
